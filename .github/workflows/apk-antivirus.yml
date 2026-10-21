@@ -63,7 +63,7 @@ jobs:
           set -e
           cat reports/scanner-control.txt
           test "$result" -eq 1
-          grep -E 'EICAR.*FOUND' reports/scanner-control.txt
+          grep -Ei 'EICAR.*FOUND' reports/scanner-control.txt
           rm eicar-control.txt
 
       - name: Scan the exact APK and every unpacked member
