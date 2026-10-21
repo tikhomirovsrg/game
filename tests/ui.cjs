@@ -83,7 +83,7 @@ const output = path.resolve(__dirname, '../test-results');
     // Confirm reset is cancellable; resizing never causes horizontal overflow.
     await page.locator('[data-action="settings"]').click();
     await page.locator('[data-action="reset-progress"]').click();
-    await page.locator('[data-action="settings"]').click();
+    await page.locator('.modal [data-action="settings"]').click();
     assert.equal(Object.keys((await stored()).completed).length, 4);
     await page.locator('[data-action="close-modal"]').click();
     for (const [width, height] of [[320, 568], [360, 640], [412, 915], [768, 1024]]) {
