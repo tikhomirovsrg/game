@@ -1,0 +1,94 @@
+name: Antivirus check of delivered APK
+
+on:
+  push:
+    branches: ['security/apk-antivirus']
+    paths: ['.github/workflows/apk-antivirus.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scan-delivered-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download the original delivered build
+        uses: actions/download-artifact@v4
+        with:
+          name: lumen-city-debug-apk
+          run-id: 39658841030
+          github-token: ${{ github.token }}
+          path: delivered
+
+      - name: Verify exact APK and unpack it
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports unpacked
+          echo 'c6b95fac9a39526d51bb9d85db2842f14297c93917cf780961a281a2c0634098  delivered/app-debug.apk' | sha256sum --check | tee reports/integrity.txt
+          sha256sum delivered/app-debug.apk >> reports/integrity.txt
+          python3 -m zipfile -e delivered/app-debug.apk unpacked
+
+      - name: Install antivirus and obtain current official signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam.service || true
+          sudo freshclam --stdout | tee reports/database-update.txt
+          clamscan --version | tee reports/engine-version.txt
+          for db in /var/lib/clamav/*.cvd /var/lib/clamav/*.cld; do
+            if [ -f "$db" ]; then
+              sigtool --info "$db" >> reports/database-info.txt
+            fi
+          done
+
+      - name: Confirm scanner detects the harmless EICAR control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          data = base64.b64decode('WDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=')
+          Path('eicar-control.txt').write_bytes(data)
+          PY
+          set +e
+          clamscan --fail-if-cvd-older-than=3 eicar-control.txt > reports/scanner-control.txt 2>&1
+          result=$?
+          set -e
+          cat reports/scanner-control.txt
+          test "$result" -eq 1
+          grep -E 'EICAR.*FOUND' reports/scanner-control.txt
+          rm eicar-control.txt
+
+      - name: Scan the exact APK and every unpacked member
+        shell: bash
+        run: |
+          set -euo pipefail
+          clamscan --recursive --scan-archive=yes --alert-encrypted=yes --alert-exceeds-max=yes --fail-if-cvd-older-than=3 --log=reports/apk-scan.txt delivered/app-debug.apk unpacked
+          {
+            echo '## Antivirus result for Lumen City 0.1.0 debug'
+            echo
+            echo 'Exact delivered APK verified by SHA-256.'
+            echo 'ClamAV scanned the APK and all unpacked members with current official signatures.'
+            echo 'A separate harmless EICAR control confirmed detection before the game scan.'
+            echo 'No detections is not a guarantee of safety or a behavioral Android sandbox test.'
+            echo
+            echo '~~~text'
+            cat reports/engine-version.txt reports/integrity.txt
+            tail -n 16 reports/apk-scan.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep all scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-city-antivirus-report
+          path: reports/
+          retention-days: 30
