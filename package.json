@@ -1,0 +1,12 @@
+{
+  "name": "lumen-city",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline Android light-network puzzle and city restoration game",
+  "scripts": {
+    "test": "node --test tests/engine.test.cjs",
+    "test:ui": "node tests/ui.cjs",
+    "preview": "node scripts/preview.cjs"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}
