@@ -96,7 +96,8 @@ const output = path.resolve(__dirname, '../test-results');
     // Board 6x6 on a small screen, reached using a valid sequential saved campaign.
     const late = E.newProgress();
     for (let id = 1; id < 40; id++) E.recordWin(late, E.campaignLevel(id), 50, 0);
-    await page.evaluate(p => localStorage.setItem('lumen-city-v1', JSON.stringify(p)), late);
+    // Seed after the previous document's pagehide autosave, before app startup.
+    await page.addInitScript(p => localStorage.setItem('lumen-city-v1', JSON.stringify(p)), late);
     await page.setViewportSize({ width: 360, height: 800 }); await page.reload();
     await page.locator('[data-level="40"]').click();
     assert.equal(await page.locator('[data-tile]').count(), 36);
